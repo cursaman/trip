@@ -18,6 +18,7 @@ const infoFields = {
 export default function PlaceDetail() {
   const { contentId } = useParams();
   const [params] = useSearchParams();
+  const contentTypeIdFromUrl = params.get("type") || "";
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -27,12 +28,12 @@ export default function PlaceDetail() {
       const common = await getCommonDetail(contentId);
       if (!common) throw new Error("상세정보를 찾을 수 없습니다.");
       const place = normalizePlace(common);
-      const type = params.get("type") || place.contentTypeId;
+      const type = contentTypeIdFromUrl || place.contentTypeId;
       const results = await Promise.allSettled([getIntroDetail(contentId, type), getDetailImages(contentId)]);
       setState({ place: { ...place, overview: stripHtml(common.overview || ""), homepage: common.homepage || "" }, type, intro: results[0].status === "fulfilled" ? results[0].value : {}, images: results[1].status === "fulfilled" ? results[1].value : [] });
     } catch (error) { setError(error.message); }
     finally { setLoading(false); }
-  }, [contentId, params]);
+  }, [contentId, contentTypeIdFromUrl]);
   useEffect(() => { load(); }, [load]);
   if (loading) return <Loading message="상세정보를 불러오는 중입니다."/>;
   if (error) return <div className="page container"><ErrorMessage message={error} onRetry={load}/></div>;

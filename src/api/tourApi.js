@@ -19,7 +19,14 @@ const tourApi = axios.create({
 
 function parse(response) {
   const api = response?.data?.response;
-  if (!api) throw new Error("관광공사 API 응답 형식을 확인할 수 없습니다.");
+  if (!api) {
+    const serviceError = response?.data?.OpenAPI_ServiceResponse?.cmmMsgHeader;
+    throw new Error(
+      serviceError?.returnAuthMsg ||
+      serviceError?.errMsg ||
+      "관광공사 API 응답 형식을 확인할 수 없습니다.",
+    );
+  }
   const code = String(api.header?.resultCode || "");
   if (code && !["0000", "00"].includes(code)) {
     throw new Error(api.header?.resultMsg || "관광정보 요청에 실패했습니다.");
@@ -40,7 +47,21 @@ function checkKey() {
 
 async function request(path, params, signal) {
   checkKey();
-  return parse(await tourApi.get(path, { params, signal }));
+  try {
+    return parse(await tourApi.get(path, { params, signal }));
+  } catch (error) {
+    if (error.name === "CanceledError") throw error;
+    if (error.response?.status) {
+      throw new Error(`관광정보 요청에 실패했습니다. (HTTP ${error.response.status})`);
+    }
+    if (error.code === "ECONNABORTED") {
+      throw new Error("관광정보 서버의 응답 시간이 초과되었습니다.");
+    }
+    if (error.request && !error.response) {
+      throw new Error("관광정보 서버에 연결할 수 없습니다. 네트워크 또는 배포 환경의 CORS 설정을 확인해 주세요.");
+    }
+    throw error;
+  }
 }
 
 export const getDistricts = () =>
@@ -78,9 +99,9 @@ export const getFestivals = ({
 
 export const getCommonDetail = async (contentId) => {
   const result = await request("/detailCommon2", {
-    contentId, defaultYN: "Y", firstImageYN: "Y", areacodeYN: "Y",
-    catcodeYN: "Y", addrinfoYN: "Y", mapinfoYN: "Y", overviewYN: "Y",
-    pageNo: 1, numOfRows: 1,
+    contentId,
+    pageNo: 1,
+    numOfRows: 1,
   });
   return result.items[0] || null;
 };
